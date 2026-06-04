@@ -2,12 +2,17 @@ package root
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/open-cli-collective/atlassian-go/artifact"
+	"github.com/open-cli-collective/atlassian-go/auth"
 	"github.com/open-cli-collective/atlassian-go/testutil"
 	"github.com/open-cli-collective/atlassian-go/view"
 	"github.com/spf13/cobra"
+
+	"github.com/open-cli-collective/confluence-cli/internal/config"
 )
 
 func TestNewCmd(t *testing.T) {
@@ -112,6 +117,29 @@ func TestRegisterCommands(t *testing.T) {
 
 	RegisterCommands(cmd, opts, registrar)
 	testutil.True(t, called)
+}
+
+func TestOptions_APIClient_ProxySkipsAuthHeader(t *testing.T) {
+	var capturedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	_, opts := NewCmd()
+	opts.SetConfig(&config.Config{
+		URL:        server.URL,
+		AuthMethod: auth.AuthMethodProxy,
+	})
+	c, err := opts.APIClient()
+	testutil.RequireNoError(t, err)
+	testutil.Equal(t, "", c.GetAuthHeader())
+
+	_, err = c.Get(t.Context(), "/api/v2/spaces")
+	testutil.RequireNoError(t, err)
+	testutil.Equal(t, "", capturedAuth)
 }
 
 func TestValidateOutputFormat(t *testing.T) {
