@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/open-cli-collective/atlassian-go/auth"
+	"github.com/open-cli-collective/atlassian-go/client"
 	"github.com/open-cli-collective/atlassian-go/credstore"
 	"github.com/open-cli-collective/atlassian-go/keyring"
 	"github.com/open-cli-collective/atlassian-go/prompt"
@@ -23,17 +24,15 @@ import (
 
 // clientBuilder constructs an *api.Client from a config.
 // Pulled out as a parameter so tests can inject an httptest-pointed client
-// without depending on api.NewBearerClient's gateway URL.
+// without depending on the bearer gateway URL.
 type clientBuilder func(cfg *config.Config) (*api.Client, error)
 
 func defaultClientBuilder(cfg *config.Config) (*api.Client, error) {
-	if cfg.AuthMethod == auth.AuthMethodBearer {
-		return api.NewBearerClient(cfg.APIToken, cfg.CloudID)
-	}
-	if cfg.AuthMethod == auth.AuthMethodProxy {
-		return api.NewProxyClient(cfg.URL)
-	}
-	return api.NewClient(cfg.URL, cfg.Email, cfg.APIToken), nil
+	return api.New(api.ClientConfig{
+		URL: cfg.URL, Email: cfg.Email, APIToken: cfg.APIToken,
+		AuthMethod: cfg.AuthMethod, CloudID: cfg.CloudID,
+		GatewayBaseURL: client.GatewayBaseURLFromEnv("CFL_GATEWAY_BASE_URL"),
+	})
 }
 
 // Register adds the init command to the root command.
@@ -322,10 +321,9 @@ func runInit(ctx context.Context, opts *root.Options, prefillURL, prefillEmail s
 	// (via `cfl set-credential`). Fail loud naming the first missing
 	// field.
 	if !prompt.WantPrompt(opts.NonInteractive, opts.Stdin) {
-		if err := auth.RequireNonInteractiveFields(
-			cfg.URL, cfg.AuthMethod, cfg.Email, cfg.APIToken, cfg.CloudID,
-			"cfl set-credential --ref atlassian-cli/default --key api_token --stdin",
-		); err != nil {
+		credentials := auth.Credentials{Method: cfg.AuthMethod, Email: cfg.Email, APIToken: cfg.APIToken, CloudID: cfg.CloudID}
+		if err := credentials.RequireNonInteractive(cfg.URL,
+			"cfl set-credential --ref atlassian-cli/default --key api_token --stdin"); err != nil {
 			return err
 		}
 	} else {
@@ -336,9 +334,11 @@ func runInit(ctx context.Context, opts *root.Options, prefillURL, prefillEmail s
 	}
 
 	cfg.NormalizeURL()
-	cfg.AuthMethod, cfg.Email, cfg.APIToken, cfg.CloudID = auth.NormalizeConfig(
-		cfg.AuthMethod, cfg.Email, cfg.APIToken, cfg.CloudID,
-	)
+	credentials := (auth.Credentials{Method: cfg.AuthMethod, Email: cfg.Email, APIToken: cfg.APIToken, CloudID: cfg.CloudID}).Normalize()
+	cfg.AuthMethod = credentials.Method
+	cfg.Email = credentials.Email
+	cfg.APIToken = credentials.APIToken
+	cfg.CloudID = credentials.CloudID
 
 	if err := cfg.ValidateForInit(noVerify); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)

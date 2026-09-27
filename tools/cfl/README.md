@@ -894,6 +894,8 @@ Environment variables override file-based config. Variables are checked in order
 | Cloud ID | `CFL_CLOUD_ID` → `ATLASSIAN_CLOUD_ID` → shared `default` → legacy |
 | Bearer Gateway Base URL | `CFL_GATEWAY_BASE_URL` → `ATLASSIAN_GATEWAY_BASE_URL` → `https://api.atlassian.com` |
 
+Gateway overrides must use HTTPS, except for loopback HTTP endpoints used in local testing.
+
 Per §2.2 connection config is single-sourced from the shared `default` section — per-tool `cfl:`/`jtk:` sections carry only non-secret defaults and may not override `url`/`email`/`auth_method`/`cloud_id`.
 
 Set `ATLASSIAN_AUTH_METHOD=proxy` (or `CFL_AUTH_METHOD=proxy`) with `ATLASSIAN_URL`/`CFL_URL` to use a trusted proxy. Proxy auth ignores email, token, and cloud ID because the proxy is responsible for upstream authentication.

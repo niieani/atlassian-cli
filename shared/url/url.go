@@ -2,10 +2,31 @@
 package url
 
 import (
+	"errors"
 	"net/netip"
 	neturl "net/url"
 	"strings"
 )
+
+// ErrRequiresHTTPS is returned for a cleartext non-loopback URL.
+var ErrRequiresHTTPS = errors.New("url must use https unless it is loopback http")
+
+// RequireSecureOrLoopback permits HTTPS endpoints and local HTTP endpoints.
+// Scheme-less URLs are normalized to HTTPS, as they are by API clients.
+func RequireSecureOrLoopback(u string) error {
+	if strings.Contains(u, "://") && !HasScheme(u) {
+		return ErrRequiresHTTPS
+	}
+	u = NormalizeURL(u)
+	parsed, err := neturl.Parse(u)
+	if err != nil || parsed.Host == "" {
+		return ErrRequiresHTTPS
+	}
+	if parsed.Scheme == "https" || IsLoopbackHTTP(u) {
+		return nil
+	}
+	return ErrRequiresHTTPS
+}
 
 // NormalizeURL ensures the URL has an https scheme and no trailing slashes.
 // If the URL is empty, it returns an empty string.

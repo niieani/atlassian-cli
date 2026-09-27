@@ -1,6 +1,38 @@
 package url //nolint:revive // test file for url package
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
+
+func TestRequireSecureOrLoopback(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		url   string
+		valid bool
+	}{
+		{"https://proxy.example.com/path", true},
+		{"proxy.example.com/path", true},
+		{"http://localhost:8080/path", true},
+		{"http://127.0.0.1:8080/path", true},
+		{"http://[::1]:8080/path", true},
+		{"http://proxy.example.com/path", false},
+		{"ftp://proxy.example.com/path", false},
+		{"https://", false},
+		{"", false},
+	} {
+		t.Run(tt.url, func(t *testing.T) {
+			t.Parallel()
+			err := RequireSecureOrLoopback(tt.url)
+			if tt.valid && err != nil {
+				t.Fatalf("RequireSecureOrLoopback(%q) = %v, want nil", tt.url, err)
+			}
+			if !tt.valid && !errors.Is(err, ErrRequiresHTTPS) {
+				t.Fatalf("RequireSecureOrLoopback(%q) = %v, want ErrRequiresHTTPS", tt.url, err)
+			}
+		})
+	}
+}
 
 func TestNormalizeURL(t *testing.T) {
 	t.Parallel()

@@ -183,6 +183,15 @@ func TestOptions_APIClient_ProxyRejectsArbitraryHTTP(t *testing.T) {
 	}
 }
 
+func TestOptions_APIClient_UsesGatewayOverride(t *testing.T) {
+	t.Setenv("CFL_GATEWAY_BASE_URL", "https://gateway.example/")
+	_, opts := NewCmd()
+	opts.SetConfig(&config.Config{URL: "https://example.atlassian.net/wiki", APIToken: "token", AuthMethod: auth.AuthMethodBearer, CloudID: "cloud-123"})
+	c, err := opts.APIClient()
+	testutil.RequireNoError(t, err)
+	testutil.Equal(t, "https://gateway.example/ex/confluence/cloud-123/wiki", c.GetBaseURL())
+}
+
 func TestValidateOutputFormat(t *testing.T) {
 	t.Parallel()
 

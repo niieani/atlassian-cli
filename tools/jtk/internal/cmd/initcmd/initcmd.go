@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/open-cli-collective/atlassian-go/auth"
+	"github.com/open-cli-collective/atlassian-go/client"
 	"github.com/open-cli-collective/atlassian-go/credstore"
 	"github.com/open-cli-collective/atlassian-go/keyring"
 	"github.com/open-cli-collective/atlassian-go/prompt"
@@ -312,10 +313,9 @@ func runInit(ctx context.Context, opts *root.Options, prefillURL, prefillEmail, 
 	// can't run — every required value must already be in cfg from the
 	// flag prefills. Fail loud naming the first missing field.
 	if !prompt.WantPrompt(opts.NonInteractive, opts.Stdin) {
-		if err := auth.RequireNonInteractiveFields(
-			cfg.URL, cfg.AuthMethod, cfg.Email, cfg.APIToken, cfg.CloudID,
-			"jtk set-credential --ref atlassian-cli/default --key api_token --stdin",
-		); err != nil {
+		credentials := auth.Credentials{Method: cfg.AuthMethod, Email: cfg.Email, APIToken: cfg.APIToken, CloudID: cfg.CloudID}
+		if err := credentials.RequireNonInteractive(cfg.URL,
+			"jtk set-credential --ref atlassian-cli/default --key api_token --stdin"); err != nil {
 			return err
 		}
 	} else {
@@ -325,11 +325,18 @@ func runInit(ctx context.Context, opts *root.Options, prefillURL, prefillEmail, 
 		}
 	}
 
-	// Normalize URL
+	credentials := (auth.Credentials{Method: cfg.AuthMethod, Email: cfg.Email, APIToken: cfg.APIToken, CloudID: cfg.CloudID}).Normalize()
+	cfg.AuthMethod = credentials.Method
+	cfg.Email = credentials.Email
+	cfg.APIToken = credentials.APIToken
+	cfg.CloudID = credentials.CloudID
+	if cfg.AuthMethod == auth.AuthMethodProxy {
+		if err := sharedurl.RequireSecureOrLoopback(cfg.URL); err != nil {
+			return fmt.Errorf("invalid proxy URL: %w", err)
+		}
+	}
+	// Normalize URL after validation so unsupported schemes are rejected.
 	cfg.URL = sharedurl.NormalizeURL(cfg.URL)
-	cfg.AuthMethod, cfg.Email, cfg.APIToken, cfg.CloudID = auth.NormalizeConfig(
-		cfg.AuthMethod, cfg.Email, cfg.APIToken, cfg.CloudID,
-	)
 
 	return finalizeInit(ctx, opts, cfg, result, sharedPath, noVerify, defaultClientBuilder)
 }
@@ -349,11 +356,12 @@ func finalizeInit(
 		v.Println("Testing connection...")
 
 		client, err := build(api.ClientConfig{
-			URL:        cfg.URL,
-			Email:      cfg.Email,
-			APIToken:   cfg.APIToken,
-			AuthMethod: cfg.AuthMethod,
-			CloudID:    cfg.CloudID,
+			URL:            cfg.URL,
+			Email:          cfg.Email,
+			APIToken:       cfg.APIToken,
+			AuthMethod:     cfg.AuthMethod,
+			CloudID:        cfg.CloudID,
+			GatewayBaseURL: client.GatewayBaseURLFromEnv("JIRA_GATEWAY_BASE_URL"),
 		})
 		if err != nil {
 			return fmt.Errorf("creating client: %w", err)

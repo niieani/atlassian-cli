@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -139,6 +140,23 @@ func TestRunInit_Proxy_NoTokenRequiredOrPersisted(t *testing.T) {
 	ok, err := s.HasToken(keyring.KeyAPIToken)
 	testutil.RequireNoError(t, err)
 	testutil.False(t, ok)
+}
+
+func TestRunInit_Proxy_NoVerifyRejectsCleartextRemoteBeforeSave(t *testing.T) {
+	credtest.Hermetic(t)
+	opts := &root.Options{
+		NoColor: true, NonInteractive: true, Stdin: strings.NewReader(""),
+		Stdout: &bytes.Buffer{}, Stderr: &bytes.Buffer{},
+	}
+	err := runInit(context.Background(), opts,
+		"http://external.example/atlassian", "", "", false, "", auth.AuthMethodProxy, "", true)
+	if !errors.Is(err, api.ErrProxyURLRequiresHTTPS) {
+		t.Fatalf("runInit() error = %v, want insecure URL error", err)
+	}
+	_, err = os.Stat(credtest.SharedConfigPath(t))
+	if !os.IsNotExist(err) {
+		t.Fatalf("runInit() wrote invalid proxy configuration: stat error = %v", err)
+	}
 }
 
 func TestFinalizeInit_NoVerify_BasicAuthWithoutTokenSavesConfig(t *testing.T) {

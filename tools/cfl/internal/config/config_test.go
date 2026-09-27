@@ -83,6 +83,11 @@ func TestConfig_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "proxy with scheme-less URL defaults to https",
+			config:  Config{URL: "proxy.example.com/atlassian/wiki", AuthMethod: "proxy"},
+			wantErr: false,
+		},
+		{
 			name: "proxy rejects arbitrary http URL",
 			config: Config{
 				URL:        "http://example.com/atlassian/wiki",

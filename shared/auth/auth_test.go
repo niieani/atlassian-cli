@@ -203,21 +203,19 @@ func TestNormalizeConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotAuthMethod, gotEmail, gotAPIToken, gotCloudID := NormalizeConfig(
-				tt.authMethod, tt.email, tt.apiToken, tt.cloudID,
-			)
+			got := (Credentials{Method: tt.authMethod, Email: tt.email, APIToken: tt.apiToken, CloudID: tt.cloudID}).Normalize()
 
-			if gotAuthMethod != tt.wantAuthMethod {
-				t.Errorf("auth method = %q, want %q", gotAuthMethod, tt.wantAuthMethod)
+			if got.Method != tt.wantAuthMethod {
+				t.Errorf("auth method = %q, want %q", got.Method, tt.wantAuthMethod)
 			}
-			if gotEmail != tt.wantEmail {
-				t.Errorf("email = %q, want %q", gotEmail, tt.wantEmail)
+			if got.Email != tt.wantEmail {
+				t.Errorf("email = %q, want %q", got.Email, tt.wantEmail)
 			}
-			if gotAPIToken != tt.wantAPIToken {
-				t.Errorf("api token = %q, want %q", gotAPIToken, tt.wantAPIToken)
+			if got.APIToken != tt.wantAPIToken {
+				t.Errorf("api token = %q, want %q", got.APIToken, tt.wantAPIToken)
 			}
-			if gotCloudID != tt.wantCloudID {
-				t.Errorf("cloud ID = %q, want %q", gotCloudID, tt.wantCloudID)
+			if got.CloudID != tt.wantCloudID {
+				t.Errorf("cloud ID = %q, want %q", got.CloudID, tt.wantCloudID)
 			}
 		})
 	}
@@ -280,9 +278,7 @@ func TestRequireNonInteractiveFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := RequireNonInteractiveFields(
-				tt.url, tt.authMethod, tt.email, tt.apiToken, tt.cloudID, toolHint,
-			)
+			err := (Credentials{Method: tt.authMethod, Email: tt.email, APIToken: tt.apiToken, CloudID: tt.cloudID}).RequireNonInteractive(tt.url, toolHint)
 			if tt.wantError == "" {
 				if err != nil {
 					t.Fatalf("RequireNonInteractiveFields() error = %v, want nil", err)

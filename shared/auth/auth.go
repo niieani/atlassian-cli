@@ -31,44 +31,50 @@ func ValidateAuthMethod(method string) error {
 	}
 }
 
-// NormalizeConfig applies auth-method policy to config credential fields.
-//
-// Empty auth method defaults to basic. Proxy auth sends no CLI-side
-// credentials, so direct credential fields are cleared.
-func NormalizeConfig(authMethod, email, apiToken, cloudID string) (string, string, string, string) {
-	if authMethod == "" {
-		authMethod = AuthMethodBasic
-	}
-	if authMethod == AuthMethodProxy {
-		email = ""
-		apiToken = ""
-		cloudID = ""
-	}
-	return authMethod, email, apiToken, cloudID
+// Credentials groups fields governed by auth-method policy.
+type Credentials struct {
+	Method   string
+	Email    string
+	APIToken string
+	CloudID  string
 }
 
-// RequireNonInteractiveFields validates the auth fields needed by scripted
+// Normalize defaults an empty method to basic and clears direct credentials
+// for proxy auth, which sends no CLI-side credentials.
+func (c Credentials) Normalize() Credentials {
+	if c.Method == "" {
+		c.Method = AuthMethodBasic
+	}
+	if c.Method == AuthMethodProxy {
+		c.Email = ""
+		c.APIToken = ""
+		c.CloudID = ""
+	}
+	return c
+}
+
+// RequireNonInteractive validates the auth fields needed by scripted
 // init flows and names the first missing CLI value. toolHint is the
 // tool-specific set-credential command shown when the API token is absent.
-func RequireNonInteractiveFields(url, authMethod, email, apiToken, cloudID, toolHint string) error {
+func (c Credentials) RequireNonInteractive(url, toolHint string) error {
 	if url == "" {
 		return errors.New("--non-interactive: missing required value for --url")
 	}
 
-	switch authMethod {
+	switch c.Method {
 	case AuthMethodProxy:
 		return nil
 	case AuthMethodBearer:
-		if cloudID == "" {
+		if c.CloudID == "" {
 			return errors.New("--non-interactive: missing required value for --cloud-id (bearer auth)")
 		}
 	default:
-		if email == "" {
+		if c.Email == "" {
 			return errors.New("--non-interactive: missing required value for --email (basic auth)")
 		}
 	}
 
-	if apiToken == "" {
+	if c.APIToken == "" {
 		return fmt.Errorf("--non-interactive: missing required value for --token-stdin or --token-from-env VAR (or pre-stage with `%s`)", toolHint)
 	}
 	return nil

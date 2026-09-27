@@ -35,12 +35,13 @@ type Client struct {
 
 // ClientConfig contains configuration for creating a new client
 type ClientConfig struct {
-	URL        string // Full Jira URL (e.g., https://mycompany.atlassian.net or https://jira.internal.corp.com)
-	Email      string
-	APIToken   string
-	Verbose    bool
-	AuthMethod string // "basic" (default), "bearer", or "proxy"
-	CloudID    string // Required for bearer auth (used to construct gateway URL)
+	URL            string // Full Jira URL (e.g., https://mycompany.atlassian.net or https://jira.internal.corp.com)
+	Email          string
+	APIToken       string
+	Verbose        bool
+	AuthMethod     string // "basic" (default), "bearer", or "proxy"
+	CloudID        string // Required for bearer auth (used to construct gateway URL)
+	GatewayBaseURL string // Optional bearer gateway base; defaults to api.atlassian.com
 }
 
 // New creates a new Jira API client from config.
@@ -104,7 +105,14 @@ func newBearerClient(cfg ClientConfig) (*Client, error) {
 	instanceURL := url.NormalizeURL(cfg.URL)
 
 	// Gateway URLs for bearer auth
-	gatewayBase := fmt.Sprintf("%s/ex/jira/%s", client.GatewayBaseURLFromEnv("JIRA_GATEWAY_BASE_URL"), cfg.CloudID)
+	gatewayURL := cfg.GatewayBaseURL
+	if gatewayURL == "" {
+		gatewayURL = client.GatewayBaseURL
+	}
+	if err := url.RequireSecureOrLoopback(gatewayURL); err != nil {
+		return nil, fmt.Errorf("invalid gateway base URL: %w", err)
+	}
+	gatewayBase := fmt.Sprintf("%s/ex/jira/%s", url.NormalizeURL(gatewayURL), cfg.CloudID)
 	restURL := gatewayBase + "/rest/api/3"
 
 	opts := &client.Options{
@@ -127,10 +135,10 @@ func newBearerClient(cfg ClientConfig) (*Client, error) {
 // newProxyClient creates a client configured for a trusted proxy that injects
 // authentication upstream. No Authorization header is sent by the CLI.
 func newProxyClient(cfg ClientConfig) (*Client, error) {
-	baseURL := url.NormalizeURL(cfg.URL)
-	if strings.HasPrefix(baseURL, "http://") && !url.IsLoopbackHTTP(baseURL) {
-		return nil, ErrProxyURLRequiresHTTPS
+	if err := url.RequireSecureOrLoopback(cfg.URL); err != nil {
+		return nil, err
 	}
+	baseURL := url.NormalizeURL(cfg.URL)
 	restURL := baseURL + "/rest/api/3"
 
 	opts := &client.Options{SkipAuthHeader: true}
@@ -166,7 +174,7 @@ var (
 	ErrEmailRequired         = stderrors.New("email is required")
 	ErrAPITokenRequired      = stderrors.New("API token is required")
 	ErrCloudIDRequired       = stderrors.New("cloud ID is required for bearer auth")
-	ErrProxyURLRequiresHTTPS = stderrors.New("proxy auth URL must use https unless it is loopback http")
+	ErrProxyURLRequiresHTTPS = url.ErrRequiresHTTPS
 )
 
 // ErrAgileUnavailable is returned when a command requires the Agile API

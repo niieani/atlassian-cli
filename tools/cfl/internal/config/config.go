@@ -68,10 +68,12 @@ func (c *Config) validate(requireToken bool) error {
 
 	// Validate URL scheme. Proxy auth may use loopback http for a local proxy;
 	// all other cleartext URLs are rejected.
-	if !strings.HasPrefix(c.URL, "https://") {
-		if c.AuthMethod != auth.AuthMethodProxy || !sharedurl.IsLoopbackHTTP(c.URL) {
-			return errors.New("url must use https unless proxy auth uses loopback http")
+	if c.AuthMethod == auth.AuthMethodProxy {
+		if err := sharedurl.RequireSecureOrLoopback(c.URL); err != nil {
+			return err
 		}
+	} else if !strings.HasPrefix(c.URL, "https://") {
+		return errors.New("url must use https unless proxy auth uses loopback http")
 	}
 
 	switch c.AuthMethod {
